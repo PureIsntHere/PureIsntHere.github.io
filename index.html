@@ -1,13 +1,13 @@
 <!DOCTYPE html>
-<!--[if lt IE 7]>      <html class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
-<!--[if IE 7]>         <html class="no-js lt-ie9 lt-ie8"> <![endif]-->
-<!--[if IE 8]>         <html class="no-js lt-ie9"> <![endif]-->
-<!--[if gt IE 8]>      <html class="no-js"> <!--<![endif]-->
 <html>
   <head>
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <title>Lets Take A Trip</title>
+    <script>
+        const titles = ["Down the rabbithole, Alice", "Lets take a trip","Did you see that?", "hi.. Im Pure.", "Something creative here...","Hello world!","I can see you too!"]
+        var item = titles[Math.floor(Math.random()*titles.length)];
+        document.title = item;
+    </script>
     <meta name="description" content="Pures dumb website for dumb things" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="./style.css" />
@@ -27,12 +27,5 @@
     <footer id="gt" style="font-size: clamp(1rem,1.3vh,100px);">
       Create, But most importantly, Break.
     </footer>
-
-    <!--[if lt IE 7]>
-      <p class="browsehappy">
-        You are using an <strong>outdated</strong> browser. Please
-        <a href="#">upgrade your browser</a> to improve your experience.
-      </p>
-    <![endif]-->
   </body>
 </html>
