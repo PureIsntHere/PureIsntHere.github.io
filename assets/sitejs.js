@@ -15,7 +15,7 @@ function OpenTwitter(){
 }
 
 function OpenMail(){
-    window.open("indow.open('mailto:PureWasHere@protonmail.com');")
+    window.open("mailto:PureWasHere@protonmail.com")
 }
 
 function OpenGithub(){
