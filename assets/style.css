@@ -74,6 +74,14 @@ footer {
   bottom: 10%;
 }
 
+#socialsbar{
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  font-size: clamp(1.1rem,5vw,3rem);
+  gap: 30px
+}
+
 #nav{
   position: absolute;
   top: 0px;
