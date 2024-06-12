@@ -40,10 +40,6 @@
   }
 }
 
-@keyframes pop {
-
-}
-
 * {
   margin: 0;
 }
@@ -91,10 +87,7 @@ footer {
 
 .jiggle{
   transform: translateY(0%);
-  transition-property: transform;
-  transition-duration: 0.3s;
-  transition-timing-function: ease-in-out;
-  transition-delay: 0;
+  transition: transform 0.3s cubic-bezier(0,-0.73, 0.31, 1.93) 0s;
 }
 
 .jiggle:hover{

@@ -6,3 +6,18 @@ window.addEventListener("load", () => {
     console.log("Page Loaded.")
 });
 
+function OpenTwitch(){
+    window.open("https://www.twitch.tv/pureisnthere")
+}
+
+function OpenTwitter(){
+    window.open("https://twitter.com/PureIsntHere")
+}
+
+function OpenMail(){
+    window.open("indow.open('mailto:PureWasHere@protonmail.com');")
+}
+
+function OpenGithub(){
+    window.open("https://github.com/PureIsntHere")
+}
