@@ -69,6 +69,11 @@ footer {
   transform: translateY(-100%);
 }
 
+#socials {
+  position: absolute;
+  bottom: 10%;
+}
+
 #nav{
   position: absolute;
   top: 0px;
