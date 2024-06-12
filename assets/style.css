@@ -91,5 +91,5 @@ footer {
 }
 
 .jiggle:hover{
-  transform: translateY(-20%);
+  transform: translateY(-20%); 
 }

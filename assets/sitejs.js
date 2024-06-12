@@ -19,5 +19,5 @@ function OpenMail(){
 }
 
 function OpenGithub(){
-    window.open("https://github.com/PureIsntHere")
+    window.open("https://github.com/PureIsntHere") 
 }
