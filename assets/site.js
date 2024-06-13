@@ -6,6 +6,7 @@ window.addEventListener("load", () => {
     console.log("Page Loaded.")
 });
 
+//link handlers since using href links breaks animations
 function OpenTwitch(){
     window.open("https://www.twitch.tv/pureisnthere")
 }
