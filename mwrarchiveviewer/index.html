@@ -15,7 +15,6 @@
       background: linear-gradient(135deg, hsl(233, 43%, 16%), hsl(230, 20%, 7%));
       color: hsl(230, 100%, 95%);
     }
-
     #treeWrapper {
       max-width: 1000px;
       width: 95%;
@@ -28,7 +27,6 @@
       overflow-y: auto;
       max-height: 80vh;
     }
-
     h1 {
       font-size: clamp(2rem, 8vw, 4rem);
       font-weight: 300;
@@ -36,7 +34,6 @@
       margin-bottom: 1rem;
       animation: lights 5s 750ms linear infinite;
     }
-
     #search {
       width: 100%;
       padding: 0.75rem 1rem;
@@ -47,49 +44,15 @@
       background-color: #1a1a1a;
       color: #eee;
     }
-
-    ul {
-      list-style: none;
-      padding-left: 1rem;
-    }
-
-    li {
-      margin: 0.4rem 0;
-      word-wrap: break-word;
-      font-size: 0.95rem;
-    }
-
-    .folder > span::before {
-      content: "📂 ";
-    }
-    .file::before {
-      content: "📄 ";
-    }
-
-    .breadcrumb {
-      font-size: 0.85rem;
-      opacity: 0.6;
-      margin: 0.2rem 0 0.6rem 2rem;
-      user-select: text;
-    }
-    .breadcrumb::before {
-      content: "↪ ";
-    }
-
-    #version {
-      position: fixed;
-      bottom: 4px;
-      left: 8px;
-      opacity: 0.3;
-      font-size: 0.8rem;
-    }
-    #credit {
-      position: fixed;
-      bottom: 4px;
-      right: 8px;
-      opacity: 0.3;
-      font-size: 0.8rem;
-    }
+    ul { list-style: none; padding-left: 1rem; }
+    li { margin: 0.4rem 0; word-wrap: break-word; font-size: 0.95rem; }
+    .folder > span::before { content: "📂 "; }
+    .file::before   { content: "📄 "; }
+    .breadcrumb { font-size: 0.85rem; opacity: 0.6; margin: 0.2rem 0 0.6rem 2rem; user-select: text; }
+    .breadcrumb::before { content: "↪ "; }
+    #version, #credit { position: fixed; bottom: 4px; opacity: 0.3; font-size: 0.8rem; }
+    #version { left: 8px; }
+    #credit  { right: 8px; }
   </style>
 </head>
 <body>
@@ -99,7 +62,7 @@
     <ul id="tree"></ul>
   </div>
   <div id="version">v1.0</div>
-  <div id="credit">Made with 🫕 by pure</div>
+  <div id="credit">Made with <3 by pure</div>
 
   <script>
     const tree = document.getElementById("tree");
@@ -107,8 +70,9 @@
     const chunkBase = "chunks/file_structure_";
     const loadedChunks = new Set();
     const searchIndex = [];
+    let debounceTimer;
 
-    // Attempt to load a single chunk; return true if loaded, false on 404 or error
+    // Load a single chunk; return true on success, false on 404 or error
     async function loadChunk(i) {
       const name = String(i).padStart(3, '0');
       const url = `${chunkBase}${name}.json`;
@@ -124,19 +88,19 @@
       }
     }
 
-    // Load all chunks sequentially until one returns false
+    // Load chunks sequentially until missing
     async function loadAllChunks() {
       let i = 1;
-      while (true) {
-        const ok = await loadChunk(i);
-        if (!ok) break;
+      while (await loadChunk(i)) {
         i++;
       }
     }
 
+    // Display up to max 100 results and indicate if more exist
     function showResults(matches) {
       tree.innerHTML = "";
-      matches.forEach(entry => {
+      const displayed = matches.slice(0, 100);
+      displayed.forEach(entry => {
         const li = document.createElement("li");
         li.className = "file";
         li.textContent = entry.name;
@@ -150,35 +114,47 @@
         });
         tree.appendChild(li);
       });
+      if (matches.length > 100) {
+        const more = document.createElement('li');
+        more.textContent = `... and ${matches.length - 100} more results`;
+        tree.appendChild(more);
+      }
     }
 
-    searchBox.addEventListener("input", async e => {
-      const raw = e.target.value.trim().toLowerCase();
-      if (!raw) {
-        tree.innerHTML = "<li>Enter a search term...</li>";
-        return;
-      }
-      if (searchIndex.length === 0) {
-        tree.innerHTML = "<li>Loading chunks...</li>";
-        await loadAllChunks();
-      }
-
-      const tokens = raw.split(/\s+/);
-      const exts = tokens.filter(t => t.startsWith('*.')).map(t => t.slice(1));
-      const keywords = tokens.filter(t => !t.startsWith('*.'));
-
-      const results = searchIndex.filter(entry => {
-        const name = entry.name.toLowerCase();
-        const matchWords = keywords.every(k => name.includes(k));
-        const matchExt = exts.length === 0 || exts.some(ext => name.endsWith(ext));
-        return matchWords && matchExt;
-      });
-
-      showResults(results);
+    // Debounced search handler
+    searchBox.addEventListener("input", e => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(async () => {
+        const raw = e.target.value.trim().toLowerCase();
+        if (!raw) {
+          tree.innerHTML = "<li>Enter a search term...</li>";
+          return;
+        }
+        if (loadedChunks.size === 0) {
+          tree.innerHTML = "<li>Loading chunks...</li>";
+          await loadAllChunks();
+        }
+        const tokens = raw.split(/\s+/);
+        const exts = tokens.filter(t => t.startsWith('*.')).map(t => t.slice(1));
+        const keywords = tokens.filter(t => !t.startsWith('*.'));
+        const results = searchIndex.filter(entry => {
+          const name = entry.name.toLowerCase();
+          return keywords.every(k => name.includes(k)) &&
+                 (exts.length === 0 || exts.some(ext => name.endsWith(ext)));
+        });
+        if (results.length === 0) {
+          tree.innerHTML = "<li>No matches found</li>";
+        } else {
+          showResults(results);
+        }
+      }, 300);
     });
 
-    // Initialize with a prompt
-    tree.innerHTML = "<li>Start typing to search...</li>";
+    // Preload all chunks on load
+    document.addEventListener('DOMContentLoaded', () => {
+      loadAllChunks();
+      tree.innerHTML = "<li>Start typing to search...</li>";
+    });
   </script>
 </body>
 </html>
