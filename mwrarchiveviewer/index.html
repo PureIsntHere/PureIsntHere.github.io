@@ -1,17 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>📁 MWR Archive Viewer</title>
-
-  <link rel="stylesheet" href="../assets/style.css" />
   <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@100..900&display=swap" rel="stylesheet">
-
   <style>
+    /* Base styles */
+    html { font-size: 18px; } /* Larger base font */
     body {
       margin: 0;
-      font-family: Raleway, sans-serif;
+      font-family: 'Raleway', sans-serif;
       background: linear-gradient(135deg, hsl(233, 43%, 16%), hsl(230, 20%, 7%));
       color: hsl(230, 100%, 95%);
     }
@@ -26,140 +25,212 @@
       backdrop-filter: blur(10px);
       overflow-y: auto;
       max-height: 80vh;
+      border: 1px solid rgba(255,255,255,0.1);
     }
     h1 {
-      font-size: clamp(2rem, 8vw, 4rem);
+      font-size: clamp(2.5rem, 6vw, 4.5rem);
       font-weight: 300;
       text-align: center;
-      margin-bottom: 1rem;
-      animation: lights 5s 750ms linear infinite;
+      margin-bottom: 1.2rem;
     }
     #search {
       width: 100%;
-      padding: 0.75rem 1rem;
-      margin-bottom: 1rem;
-      font-size: 1rem;
+      padding: 0.85rem 1rem;
+      margin-bottom: 1.2rem;
+      font-size: 1.125rem;
       border-radius: 6px;
       border: 1px solid #444;
       background-color: #1a1a1a;
       color: #eee;
+      outline: none;
     }
-    ul { list-style: none; padding-left: 1rem; }
-    li { margin: 0.4rem 0; word-wrap: break-word; font-size: 0.95rem; }
-    .folder > span::before { content: "📂 "; cursor: pointer; }
-    .file::before   { content: "📄 "; }
-    .breadcrumb { font-size: 0.85rem; opacity: 0.6; margin: 0.2rem 0 0.6rem 2rem; user-select: text; }
+    #search::placeholder { color: #888; font-size: 1.125rem; }
+
+    /* Tree list styles */
+    #tree {
+      list-style: none;
+      margin: 0;
+      padding-left: 0;
+    }
+    #tree ul {
+      list-style: none;
+      margin: 0;
+      padding-left: 1.5rem;
+    }
+    #tree li {
+      margin: 0.45rem 0;
+      font-size: 1.1rem;
+      cursor: default;
+    }
+    #tree li span {
+      user-select: none;
+    }
+    #tree li.folder span {
+      cursor: pointer;
+    }
+    #tree li.folder > span::before {
+      content: "📂 ";
+      margin-right: 0.4rem;
+    }
+    #tree li.file > span::before {
+      content: "📄 ";
+      margin-right: 0.4rem;
+    }
+
+    /* Breadcrumb */
+    .breadcrumb {
+      font-size: 1rem;
+      opacity: 0.7;
+      margin: 0.3rem 0 0.8rem 2rem;
+      user-select: text;
+      color: #ccc;
+    }
     .breadcrumb::before { content: "↪ "; }
-    #version, #credit { position: fixed; bottom: 4px; opacity: 0.3; font-size: 0.8rem; }
+
+    /* Show more button */
+    .show-more-btn {
+      display: block;
+      margin: 1.2rem auto 0;
+      padding: 0.6rem 1.2rem;
+      font-size: 1rem;
+      background: #444;
+      border: none;
+      border-radius: 4px;
+      color: #eee;
+      cursor: pointer;
+    }
+
+    /* Footer */
+    #version, #credit {
+      position: fixed;
+      bottom: 4px;
+      opacity: 0.3;
+      font-size: 0.85rem;
+    }
     #version { left: 8px; }
     #credit  { right: 8px; }
-    .show-more-btn { display: block; margin: 1rem auto; padding: 0.5rem 1rem; background: #444; border: none; border-radius: 4px; color: #eee; cursor: pointer; }
   </style>
 </head>
 <body>
   <div id="treeWrapper">
     <h1>📁 MWR Archive Viewer</h1>
-    <input id="search" placeholder="Search (e.g. ghillie *.h1image)" />
+    <input id="search" placeholder="Search (e.g. ghillie *.h1image)">
     <ul id="tree"></ul>
+    <button id="moreBtn" class="show-more-btn" style="display:none;">Show more</button>
   </div>
   <div id="version">v1.0</div>
   <div id="credit">Made with 🫕 by pure</div>
 
   <script>
-    const tree = document.getElementById("tree");
-    const searchBox = document.getElementById("search");
-    const chunkBase = "chunks/file_structure_";
-    const loadedChunks = new Set();
-    let searchIndex = [];
-    let searchResults = [];
+    const treeEl = document.getElementById('tree');
+    const moreBtn = document.getElementById('moreBtn');
+    const searchBox = document.getElementById('search');
+    const BASE = 'chunks/file_structure_';
+    const TOTAL = 20;
+    let index = [];
+    let allMatches = [];
     let displayCount = 100;
-    let debounceTimer;
 
-    // Flatten tree nodes into searchIndex
-    function flatten(node) {
-      searchIndex.push(node);
-      if (node.children) node.children.forEach(flatten);
+    function flatten(node, path = '') {
+      const full = path ? `${path}/${node.name}` : node.name;
+      index.push({ name: node.name, path: full });
+      if (node.children) node.children.forEach(c => flatten(c, full));
     }
 
-    // Load a single chunk; return true on success, false on missing
-    async function loadChunk(i) {
-      const name = String(i).padStart(3, '0');
-      const url = `${chunkBase}${name}.json`;
-      try {
-        const res = await fetch(url);
-        if (!res.ok) return false;
-        const json = await res.json();
-        json.children.forEach(entry => flatten(entry));
-        loadedChunks.add(i);
-        return true;
-      } catch {
-        return false;
-      }
-    }
-
-    // Load chunks sequentially until one fails
     async function loadAllChunks() {
-      let i = 1;
-      while (await loadChunk(i)) { i++; }
+      const tasks = [];
+      for (let i = 1; i <= TOTAL; i++) {
+        const fn = String(i).padStart(3, '0');
+        tasks.push(
+          fetch(`${BASE}${fn}.json`)
+            .then(res => res.ok ? res.json() : null)
+            .then(js => js && js.children.forEach(n => flatten(n)))
+            .catch(() => {})
+        );
+      }
+      await Promise.all(tasks);
+      if (!searchBox.value.trim()) treeEl.innerHTML = '<li>Start typing to search...</li>';
     }
 
-    // Show paginated search results
-    function showResultsPage() {
-      tree.innerHTML = '';
-      const slice = searchResults.slice(0, displayCount);
-      slice.forEach(node => {
-        const li = document.createElement('li');
-        li.className = node.children && node.children.length ? 'folder' : 'file';
-        const span = document.createElement('span');
-        span.textContent = node.name;
-        li.appendChild(span);
-        tree.appendChild(li);
-      });
-      if (searchResults.length > displayCount) {
-        const btn = document.createElement('button');
-        btn.textContent = `Show more (${Math.min(50, searchResults.length - displayCount)})`;
-        btn.className = 'show-more-btn';
-        btn.addEventListener('click', () => {
-          displayCount += 50;
-          showResultsPage();
+    function buildTree(arr) {
+      const map = {};
+      arr.forEach(item => {
+        const parts = item.path.split('/');
+        let cur = map;
+        parts.forEach((p, idx) => {
+          if (!cur[p]) cur[p] = { name: p, children: {}, path: null };
+          if (idx === parts.length - 1) cur[p].path = item.path;
+          cur = cur[p].children;
         });
-        tree.appendChild(btn);
+      });
+      const toArr = obj => Object.values(obj).map(n => ({ name: n.name, path: n.path, children: toArr(n.children) }));
+      return toArr(map);
+    }
+
+    function renderNodes(nodes, container) {
+      nodes.forEach(n => {
+        const li = document.createElement('li');
+        li.classList.add(n.children.length ? 'folder' : 'file');
+        const span = document.createElement('span'); span.textContent = n.name;
+        li.append(span);
+        if (n.children.length) {
+          const sub = document.createElement('ul'); sub.style.display = 'block';
+          span.addEventListener('click', () => {
+            sub.style.display = sub.style.display === 'none' ? 'block' : 'none';
+          });
+          renderNodes(n.children, sub);
+          li.append(sub);
+        } else {
+          span.addEventListener('click', () => {
+            document.querySelectorAll('.breadcrumb').forEach(e => e.remove());
+            const bc = document.createElement('div'); bc.className = 'breadcrumb'; bc.textContent = n.path;
+            li.insertAdjacentElement('afterend', bc);
+          });
+        }
+        container.append(li);
+      });
+    }
+
+    function renderSlice() {
+      treeEl.innerHTML = '';
+      const slice = allMatches.slice(0, displayCount);
+      const treeData = buildTree(slice);
+      renderNodes(treeData, treeEl);
+      if (allMatches.length > displayCount) {
+        moreBtn.style.display = 'block';
+        moreBtn.textContent = `Show more (${allMatches.length - displayCount})`;
+      } else {
+        moreBtn.style.display = 'none';
       }
     }
 
-    // Debounced search handler
-    searchBox.addEventListener('input', e => {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(async () => {
-        const raw = e.target.value.trim().toLowerCase();
-        if (!raw) {
-          tree.innerHTML = '<li>Start typing to search...</li>';
-          return;
-        }
-        if (loadedChunks.size === 0) {
-          tree.innerHTML = '<li>Loading chunks...</li>';
-          await loadAllChunks();
-        }
-        const tokens = raw.split(/\s+/);
-        const exts = tokens.filter(t => t.startsWith('*.')).map(t => t.slice(1));
-        const keywords = tokens.filter(t => !t.startsWith('*.'));
-        searchResults = searchIndex.filter(node => {
-          const name = node.name.toLowerCase();
-          return keywords.every(k => name.includes(k)) &&
-                 (exts.length === 0 || exts.some(ext => name.endsWith(ext)));
-        });
-        displayCount = 100;
-        if (searchResults.length === 0) {
-          tree.innerHTML = '<li>No matches found</li>';
-        } else {
-          showResultsPage();
-        }
-      }, 300);
+    function updateResults() {
+      const raw = searchBox.value.trim().toLowerCase();
+      if (!raw) {
+        treeEl.innerHTML = '<li>Start typing to search...</li>';
+        moreBtn.style.display = 'none';
+        return;
+      }
+      const tokens = raw.split(/\s+/);
+      const exts = tokens.filter(t => t.startsWith('*.')).map(t => t.slice(1));
+      const kws = tokens.filter(t => !t.startsWith('*.'));
+      allMatches = index.filter(it =>
+        kws.every(k => it.name.toLowerCase().includes(k)) &&
+        (exts.length ? exts.some(e => it.name.toLowerCase().endsWith(e)) : true)
+      );
+      displayCount = 100;
+      renderSlice();
+    }
+
+    moreBtn.addEventListener('click', () => {
+      displayCount += 50;
+      renderSlice();
     });
 
-    // Initial prompt
     document.addEventListener('DOMContentLoaded', () => {
-      tree.innerHTML = '<li>Start typing to search...</li>';
+      treeEl.innerHTML = '<li>Loading data...</li>';
+      loadAllChunks();
+      searchBox.addEventListener('input', updateResults);
     });
   </script>
 </body>
