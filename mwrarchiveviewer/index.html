@@ -70,7 +70,6 @@
     const searchBox = document.getElementById("search");
     const chunkBase = "chunks/file_structure_";
     const loadedChunks = new Set();
-    let treeData = [];
     let searchIndex = [];
     let searchResults = [];
     let displayCount = 100;
@@ -90,10 +89,7 @@
         const res = await fetch(url);
         if (!res.ok) return false;
         const json = await res.json();
-        json.children.forEach(entry => {
-          treeData.push(entry);
-          flatten(entry);
-        });
+        json.children.forEach(entry => flatten(entry));
         loadedChunks.add(i);
         return true;
       } catch {
@@ -101,44 +97,10 @@
       }
     }
 
-    // Sequentially load chunks until one fails
+    // Load chunks sequentially until one fails
     async function loadAllChunks() {
       let i = 1;
       while (await loadChunk(i)) { i++; }
-      // After load, render full tree view if no search
-      if (!searchBox.value) renderTree(treeData, tree);
-    }
-
-    // Render nested tree structure
-    function renderTree(nodes, container) {
-      container.innerHTML = '';
-      nodes.forEach(node => {
-        const li = document.createElement('li');
-        const span = document.createElement('span');
-        span.textContent = node.name;
-        li.appendChild(span);
-
-        if (node.children && node.children.length) {
-          li.className = 'folder';
-          const subUl = document.createElement('ul');
-          subUl.style.display = 'none';
-          renderTree(node.children, subUl);
-          span.addEventListener('click', () => {
-            subUl.style.display = subUl.style.display === 'none' ? 'block' : 'none';
-          });
-          li.appendChild(subUl);
-        } else {
-          li.className = 'file';
-          span.addEventListener('click', () => {
-            document.querySelectorAll('.breadcrumb').forEach(el => el.remove());
-            const bc = document.createElement('div');
-            bc.className = 'breadcrumb';
-            bc.textContent = node.name;
-            li.insertAdjacentElement('afterend', bc);
-          });
-        }
-        container.appendChild(li);
-      });
     }
 
     // Show paginated search results
@@ -147,7 +109,7 @@
       const slice = searchResults.slice(0, displayCount);
       slice.forEach(node => {
         const li = document.createElement('li');
-        li.className = (node.children && node.children.length) ? 'folder' : 'file';
+        li.className = node.children && node.children.length ? 'folder' : 'file';
         const span = document.createElement('span');
         span.textContent = node.name;
         li.appendChild(span);
@@ -171,17 +133,20 @@
       debounceTimer = setTimeout(async () => {
         const raw = e.target.value.trim().toLowerCase();
         if (!raw) {
-          // No search: show full tree
-          renderTree(treeData, tree);
+          tree.innerHTML = '<li>Start typing to search...</li>';
           return;
         }
-        // Build results
+        if (loadedChunks.size === 0) {
+          tree.innerHTML = '<li>Loading chunks...</li>';
+          await loadAllChunks();
+        }
         const tokens = raw.split(/\s+/);
         const exts = tokens.filter(t => t.startsWith('*.')).map(t => t.slice(1));
         const keywords = tokens.filter(t => !t.startsWith('*.'));
         searchResults = searchIndex.filter(node => {
           const name = node.name.toLowerCase();
-          return keywords.every(k => name.includes(k)) && (exts.length === 0 || exts.some(ext => name.endsWith(ext)));
+          return keywords.every(k => name.includes(k)) &&
+                 (exts.length === 0 || exts.some(ext => name.endsWith(ext)));
         });
         displayCount = 100;
         if (searchResults.length === 0) {
@@ -192,10 +157,9 @@
       }, 300);
     });
 
-    // Initialize
+    // Initial prompt
     document.addEventListener('DOMContentLoaded', () => {
-      tree.innerHTML = '<li>Loading file structure...</li>';
-      loadAllChunks();
+      tree.innerHTML = '<li>Start typing to search...</li>';
     });
   </script>
 </body>
