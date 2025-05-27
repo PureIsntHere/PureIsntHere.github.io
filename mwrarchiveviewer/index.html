@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>📁 MWR Archive Viewer</title>
+
+  <link rel="stylesheet" href="../assets/style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@100..900&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Raleway, sans-serif;
+      background: linear-gradient(135deg, hsl(233, 43%, 16%), hsl(230, 20%, 7%));
+      color: hsl(230, 100%, 95%);
+    }
+
+    #treeWrapper {
+      max-width: 1000px;
+      width: 95%;
+      margin: 5vh auto;
+      background: rgba(0, 0, 0, 0.35);
+      padding: 1.5rem;
+      border-radius: 12px;
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      overflow-y: auto;
+      max-height: 80vh;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 8vw, 4rem);
+      font-weight: 300;
+      text-align: center;
+      margin-bottom: 1rem;
+      animation: lights 5s 750ms linear infinite;
+    }
+
+    #search {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1rem;
+      font-size: 1rem;
+      border-radius: 6px;
+      border: 1px solid #444;
+      background-color: #1a1a1a;
+      color: #eee;
+    }
+
+    ul {
+      list-style: none;
+      padding-left: 1rem;
+    }
+
+    li {
+      margin: 0.4rem 0;
+      word-wrap: break-word;
+      font-size: 0.95rem;
+    }
+
+    .folder > span::before {
+      content: "📂 ";
+    }
+    .file::before {
+      content: "📄 ";
+    }
+
+    .breadcrumb {
+      font-size: 0.85rem;
+      opacity: 0.6;
+      margin: 0.2rem 0 0.6rem 2rem;
+      user-select: text;
+    }
+    .breadcrumb::before {
+      content: "↪ ";
+    }
+
+    #version {
+      position: fixed;
+      bottom: 4px;
+      left: 8px;
+      opacity: 0.3;
+      font-size: 0.8rem;
+    }
+    #credit {
+      position: fixed;
+      bottom: 4px;
+      right: 8px;
+      opacity: 0.3;
+      font-size: 0.8rem;
+    }
+  </style>
+</head>
+<body>
+  <div id="treeWrapper">
+    <h1>📁 MWR Archive Viewer</h1>
+    <input id="search" placeholder="Search (e.g. ghillie *.h1image)" />
+    <ul id="tree"></ul>
+  </div>
+  <div id="version">v1.0</div>
+  <div id="credit">Made with 🫕 by pure</div>
+
+  <script>
+    const tree = document.getElementById("tree");
+    const searchBox = document.getElementById("search");
+    const chunkBase = "chunks/file_structure_";
+    const loadedChunks = new Set();
+    const maxChunks = 999;
+    const searchIndex = [];
+
+    async function loadChunk(i) {
+      if (loadedChunks.has(i)) return;
+      try {
+        const res = await fetch(`${chunkBase}${String(i).padStart(3, '0')}.json`);
+        const json = await res.json();
+        json.children.forEach(entry => {
+          searchIndex.push(entry);
+        });
+        loadedChunks.add(i);
+      } catch (e) {
+        return false;
+      }
+      return true;
+    }
+
+    async function loadAllChunks() {
+      for (let i = 0; i <= maxChunks; i++) {
+        const ok = await loadChunk(i);
+        if (!ok) break;
+      }
+    }
+
+    function showResults(matches) {
+      tree.innerHTML = "";
+      matches.forEach(entry => {
+        const li = document.createElement("li");
+        li.className = "file";
+        li.textContent = entry.name;
+        li.title = entry.name;
+        li.addEventListener("click", () => {
+          document.querySelectorAll('.breadcrumb').forEach(el => el.remove());
+          const bc = document.createElement("div");
+          bc.className = "breadcrumb";
+          bc.textContent = entry.name;
+          li.insertAdjacentElement("afterend", bc);
+        });
+        tree.appendChild(li);
+      });
+    }
+
+    searchBox.addEventListener("input", async e => {
+      const raw = e.target.value.trim().toLowerCase();
+      if (!raw) {
+        tree.innerHTML = "<li>Enter a search term...</li>";
+        return;
+      }
+      if (searchIndex.length === 0) {
+        tree.innerHTML = "<li>Loading chunks...</li>";
+        await loadAllChunks();
+      }
+
+      const tokens = raw.split(/\s+/);
+      const exts = tokens.filter(t => t.startsWith('*.')).map(t => t.slice(1));
+      const keywords = tokens.filter(t => !t.startsWith('*.'));
+
+      const results = searchIndex.filter(entry => {
+        const name = entry.name.toLowerCase();
+        const matchWords = keywords.every(k => name.includes(k));
+        const matchExt = exts.length === 0 || exts.some(ext => name.endsWith(ext));
+        return matchWords && matchExt;
+      });
+
+      showResults(results);
+    });
+
+    // Init default state
+    tree.innerHTML = "<li>Start typing to search...</li>";
+  </script>
+</body>
+</html>
