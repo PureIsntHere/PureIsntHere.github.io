@@ -46,13 +46,14 @@
     }
     ul { list-style: none; padding-left: 1rem; }
     li { margin: 0.4rem 0; word-wrap: break-word; font-size: 0.95rem; }
-    .folder > span::before { content: "📂 "; }
+    .folder > span::before { content: "📂 "; cursor: pointer; }
     .file::before   { content: "📄 "; }
     .breadcrumb { font-size: 0.85rem; opacity: 0.6; margin: 0.2rem 0 0.6rem 2rem; user-select: text; }
     .breadcrumb::before { content: "↪ "; }
     #version, #credit { position: fixed; bottom: 4px; opacity: 0.3; font-size: 0.8rem; }
     #version { left: 8px; }
     #credit  { right: 8px; }
+    .show-more-btn { display: block; margin: 1rem auto; padding: 0.5rem 1rem; background: #444; border: none; border-radius: 4px; color: #eee; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -62,17 +63,26 @@
     <ul id="tree"></ul>
   </div>
   <div id="version">v1.0</div>
-  <div id="credit">Made with <3 by pure</div>
+  <div id="credit">Made with 🫕 by pure</div>
 
   <script>
     const tree = document.getElementById("tree");
     const searchBox = document.getElementById("search");
     const chunkBase = "chunks/file_structure_";
     const loadedChunks = new Set();
-    const searchIndex = [];
+    let treeData = [];
+    let searchIndex = [];
+    let searchResults = [];
+    let displayCount = 100;
     let debounceTimer;
 
-    // Load a single chunk; return true on success, false on 404 or error
+    // Flatten tree nodes into searchIndex
+    function flatten(node) {
+      searchIndex.push(node);
+      if (node.children) node.children.forEach(flatten);
+    }
+
+    // Load a single chunk; return true on success, false on missing
     async function loadChunk(i) {
       const name = String(i).padStart(3, '0');
       const url = `${chunkBase}${name}.json`;
@@ -80,80 +90,112 @@
         const res = await fetch(url);
         if (!res.ok) return false;
         const json = await res.json();
-        json.children.forEach(entry => searchIndex.push(entry));
+        json.children.forEach(entry => {
+          treeData.push(entry);
+          flatten(entry);
+        });
         loadedChunks.add(i);
         return true;
-      } catch (e) {
+      } catch {
         return false;
       }
     }
 
-    // Load chunks sequentially until missing
+    // Sequentially load chunks until one fails
     async function loadAllChunks() {
       let i = 1;
-      while (await loadChunk(i)) {
-        i++;
-      }
+      while (await loadChunk(i)) { i++; }
+      // After load, render full tree view if no search
+      if (!searchBox.value) renderTree(treeData, tree);
     }
 
-    // Display up to max 100 results and indicate if more exist
-    function showResults(matches) {
-      tree.innerHTML = "";
-      const displayed = matches.slice(0, 100);
-      displayed.forEach(entry => {
-        const li = document.createElement("li");
-        li.className = "file";
-        li.textContent = entry.name;
-        li.title = entry.name;
-        li.addEventListener("click", () => {
-          document.querySelectorAll('.breadcrumb').forEach(el => el.remove());
-          const bc = document.createElement("div");
-          bc.className = "breadcrumb";
-          bc.textContent = entry.name;
-          li.insertAdjacentElement("afterend", bc);
-        });
+    // Render nested tree structure
+    function renderTree(nodes, container) {
+      container.innerHTML = '';
+      nodes.forEach(node => {
+        const li = document.createElement('li');
+        const span = document.createElement('span');
+        span.textContent = node.name;
+        li.appendChild(span);
+
+        if (node.children && node.children.length) {
+          li.className = 'folder';
+          const subUl = document.createElement('ul');
+          subUl.style.display = 'none';
+          renderTree(node.children, subUl);
+          span.addEventListener('click', () => {
+            subUl.style.display = subUl.style.display === 'none' ? 'block' : 'none';
+          });
+          li.appendChild(subUl);
+        } else {
+          li.className = 'file';
+          span.addEventListener('click', () => {
+            document.querySelectorAll('.breadcrumb').forEach(el => el.remove());
+            const bc = document.createElement('div');
+            bc.className = 'breadcrumb';
+            bc.textContent = node.name;
+            li.insertAdjacentElement('afterend', bc);
+          });
+        }
+        container.appendChild(li);
+      });
+    }
+
+    // Show paginated search results
+    function showResultsPage() {
+      tree.innerHTML = '';
+      const slice = searchResults.slice(0, displayCount);
+      slice.forEach(node => {
+        const li = document.createElement('li');
+        li.className = (node.children && node.children.length) ? 'folder' : 'file';
+        const span = document.createElement('span');
+        span.textContent = node.name;
+        li.appendChild(span);
         tree.appendChild(li);
       });
-      if (matches.length > 100) {
-        const more = document.createElement('li');
-        more.textContent = `... and ${matches.length - 100} more results`;
-        tree.appendChild(more);
+      if (searchResults.length > displayCount) {
+        const btn = document.createElement('button');
+        btn.textContent = `Show more (${Math.min(50, searchResults.length - displayCount)})`;
+        btn.className = 'show-more-btn';
+        btn.addEventListener('click', () => {
+          displayCount += 50;
+          showResultsPage();
+        });
+        tree.appendChild(btn);
       }
     }
 
     // Debounced search handler
-    searchBox.addEventListener("input", e => {
+    searchBox.addEventListener('input', e => {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(async () => {
         const raw = e.target.value.trim().toLowerCase();
         if (!raw) {
-          tree.innerHTML = "<li>Enter a search term...</li>";
+          // No search: show full tree
+          renderTree(treeData, tree);
           return;
         }
-        if (loadedChunks.size === 0) {
-          tree.innerHTML = "<li>Loading chunks...</li>";
-          await loadAllChunks();
-        }
+        // Build results
         const tokens = raw.split(/\s+/);
         const exts = tokens.filter(t => t.startsWith('*.')).map(t => t.slice(1));
         const keywords = tokens.filter(t => !t.startsWith('*.'));
-        const results = searchIndex.filter(entry => {
-          const name = entry.name.toLowerCase();
-          return keywords.every(k => name.includes(k)) &&
-                 (exts.length === 0 || exts.some(ext => name.endsWith(ext)));
+        searchResults = searchIndex.filter(node => {
+          const name = node.name.toLowerCase();
+          return keywords.every(k => name.includes(k)) && (exts.length === 0 || exts.some(ext => name.endsWith(ext)));
         });
-        if (results.length === 0) {
-          tree.innerHTML = "<li>No matches found</li>";
+        displayCount = 100;
+        if (searchResults.length === 0) {
+          tree.innerHTML = '<li>No matches found</li>';
         } else {
-          showResults(results);
+          showResultsPage();
         }
       }, 300);
     });
 
-    // Preload all chunks on load
+    // Initialize
     document.addEventListener('DOMContentLoaded', () => {
+      tree.innerHTML = '<li>Loading file structure...</li>';
       loadAllChunks();
-      tree.innerHTML = "<li>Start typing to search...</li>";
     });
   </script>
 </body>
