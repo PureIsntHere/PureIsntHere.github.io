@@ -106,28 +106,31 @@
     const searchBox = document.getElementById("search");
     const chunkBase = "chunks/file_structure_";
     const loadedChunks = new Set();
-    const maxChunks = 999;
     const searchIndex = [];
 
+    // Attempt to load a single chunk; return true if loaded, false on 404 or error
     async function loadChunk(i) {
-      if (loadedChunks.has(i)) return;
+      const name = String(i).padStart(3, '0');
+      const url = `${chunkBase}${name}.json`;
       try {
-        const res = await fetch(`${chunkBase}${String(i).padStart(3, '0')}.json`);
+        const res = await fetch(url);
+        if (!res.ok) return false;
         const json = await res.json();
-        json.children.forEach(entry => {
-          searchIndex.push(entry);
-        });
+        json.children.forEach(entry => searchIndex.push(entry));
         loadedChunks.add(i);
+        return true;
       } catch (e) {
         return false;
       }
-      return true;
     }
 
+    // Load all chunks sequentially until one returns false
     async function loadAllChunks() {
-      for (let i = 0; i <= maxChunks; i++) {
+      let i = 1;
+      while (true) {
         const ok = await loadChunk(i);
         if (!ok) break;
+        i++;
       }
     }
 
@@ -174,7 +177,7 @@
       showResults(results);
     });
 
-    // Init default state
+    // Initialize with a prompt
     tree.innerHTML = "<li>Start typing to search...</li>";
   </script>
 </body>
